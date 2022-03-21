@@ -1,18 +1,28 @@
 #! usr/bin/env python3
 
+from pathlib import Path
+
 import numpy as np
 from scipy.stats import beta
 from scipy.stats import dirichlet
+
 import plotly.graph_objects as go
-#from plotly.subplots import make_subplots
 import dash
 from dash.dependencies import Input, Output
 
 
 def read_dirichlet_parameters() -> list[float]:
+    """
+    Read the alpha parameters for the Dirichlet distribution
+    The number of parameters equals the number of dimensions of the Dirichlet 
+        distribution
+    """
 
+    parameters_dir_name = 'parameters'
     input_filename = 'dirichlet_alpha_parameters.csv'
-    with open(input_filename) as param_file:
+    input_filepath = Path('.') / parameters_dir_name / input_filename 
+
+    with open(input_filepath) as param_file:
         file_string = param_file.read().replace('\n', '')
         param_file.close()
 
@@ -21,9 +31,35 @@ def read_dirichlet_parameters() -> list[float]:
     return alpha 
 
 
+def read_show_beta_plot_parameters() -> bool:
+    """
+    If the configuration file contains a single '1', then the marginal beta 
+        plots are shown; otherwise, they are hidden
+
+    return:  Boolean indicating whether or not to show the beta plots
+    """
+
+    parameters_dir_name = 'parameters'
+    input_filename = 'show_beta_plot_parameter.txt'
+    input_filepath = Path('.') / parameters_dir_name / input_filename 
+
+    with open(input_filepath) as param_file:
+        file_string = param_file.read().replace('\n', '')
+        param_file.close()
+
+    if file_string == '1':
+        show_plot = True
+    else:
+        show_plot = False
+
+    return show_plot 
+
+
 def beta_statistical_attributes() -> tuple[np.ndarray, float, int]:
 
+    # the beta distribution is defined over the interval [0, 1]
     x = np.arange(0, 1.01, 0.01)
+
     threshold = 0.50
     idx50 = int(threshold * len(x))
 
@@ -52,10 +88,6 @@ def beta_plot_attributes() -> tuple[str, str, dict, dict, str, go.Layout]:
     return left_color, right_color, line01, line02, title, layout
 
 
-# reportedly an updated way to load an external CSS; not clear whether it works
-#external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-#app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-
 app = dash.Dash()
 
 # layout from:  https://community.plotly.com/t/two-graphs-side-by-side/5312/2
@@ -67,13 +99,32 @@ app.layout = dash.html.Div([
     #dash.html.Div([dash.html.H1(id='placeholder', style={'color': 'white'})]),
 
     dash.html.Div([
-        dash.html.Div([dash.dcc.Graph(id='beta_plot_01')], className="four columns"),
-        dash.html.Div([dash.dcc.Graph(id='dirichlet_3d')], className="four columns"),
-        dash.html.Div([dash.dcc.Graph(id='beta_plot_03')], className="four columns"),
+        dash.html.Div(
+            id='beta_plot_01_container', 
+            children=[dash.dcc.Graph(
+                id='beta_plot_01', 
+                style={'width': '60vh', 'height': '40vh'})], 
+            className="four columns"),
+        dash.html.Div(
+            children=[dash.dcc.Graph(
+                id='dirichlet_3d', 
+                style={'width': '55vh', 'height': '55vh'})],
+            className="four columns"),
+        dash.html.Div(
+            id='beta_plot_03_container', 
+            children=[dash.dcc.Graph(
+                id='beta_plot_03', 
+                style={'width': '60vh', 'height': '40vh'})],
+            className="four columns"),
     ], className="row"),
 
     dash.html.Div([
-        dash.html.Div([dash.dcc.Graph(id='beta_plot_02')], className="offset-by-three four columns"),
+        dash.html.Div(
+            id='beta_plot_02_container', 
+            children=[dash.dcc.Graph(
+                id='beta_plot_02', 
+                style={'width': '60vh', 'height': '40vh'})],
+            className="offset-by-three four columns"),
     ], className="row"),
 
     dash.dcc.Interval(id='interval-component', interval=1_000, n_intervals=0)
@@ -82,9 +133,9 @@ app.layout = dash.html.Div([
 # this CSS file placed inside 'assets' directory within the dash app directory
 #app.css.append_css({'external_url': 'https://codepen.io/chriddyp/pen/bWLwgP.css'})
 
-#    dash.html.Div([
-#        dash.dcc.Graph(id='dirichlet_3d', style={'width': '80vh', 'height': '90vh'})
-#        ], className='six columns'),
+# reportedly an updated way to load an external CSS; not clear whether it works
+#external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
+#app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
 
 @app.callback(
@@ -147,6 +198,19 @@ def plot_dirichlet_3d(n_intervals: int):
 
 
 @app.callback(
+    Output('beta_plot_01_container', 'style'),
+    Input('interval-component', 'n_intervals'))
+def show_plot_beta_01(n_intervals: int):
+
+    show_plot = read_show_beta_plot_parameters()
+
+    if show_plot:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
+
+
+@app.callback(
     Output('beta_plot_01', 'figure'),
     Input('interval-component', 'n_intervals'))
 def plot_beta_01(n_intervals: int):
@@ -178,6 +242,19 @@ def plot_beta_01(n_intervals: int):
     fig.update_layout(title=title, title_x=0.5)
 
     return fig
+
+
+@app.callback(
+    Output('beta_plot_02_container', 'style'),
+    Input('interval-component', 'n_intervals'))
+def show_plot_beta_02(n_intervals: int):
+
+    show_plot = read_show_beta_plot_parameters()
+
+    if show_plot:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
 
 
 @app.callback(
@@ -215,6 +292,19 @@ def plot_beta_02(n_intervals: int):
     fig.update_layout(title=title, title_x=0.5)
 
     return fig
+
+
+@app.callback(
+    Output('beta_plot_03_container', 'style'),
+    Input('interval-component', 'n_intervals'))
+def show_plot_beta_03(n_intervals: int):
+
+    show_plot = read_show_beta_plot_parameters()
+
+    if show_plot:
+        return {'display': 'block'}
+    else:
+        return {'display': 'none'}
 
 
 @app.callback(
