@@ -103,7 +103,10 @@ app.layout = dash.html.Div([
             id='beta_plot_01_container', 
             children=[dash.dcc.Graph(
                 id='beta_plot_01', 
-                style={'width': '60vh', 'height': '40vh'})], 
+                style={
+                    'width': '60vh', 
+                    'height': '40vh', 
+                    'transform': 'rotate(-45deg)'})], 
             className="four columns"),
         dash.html.Div(
             children=[dash.dcc.Graph(
@@ -114,7 +117,10 @@ app.layout = dash.html.Div([
             id='beta_plot_03_container', 
             children=[dash.dcc.Graph(
                 id='beta_plot_03', 
-                style={'width': '60vh', 'height': '40vh'})],
+                style={
+                    'width': '60vh', 
+                    'height': '40vh', 
+                    'transform': 'rotate(45deg)'})],
             className="four columns"),
     ], className="row"),
 
