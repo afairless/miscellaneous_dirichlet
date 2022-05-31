@@ -11,19 +11,32 @@ from dash.dependencies import Input, Output, State
 from dash_daq import BooleanSwitch
 
 
-def calculate_dirichlet_mode(alpha: Sequence[float]) -> np.ndarray:
+def calculate_dirichlet_mode_from_user_input(
+    multinomial_proportion_1: float, multinomial_proportion_2: float
+    ) -> tuple[float, float, float]:
     """
+    Calculates true Dirichlet mode based on user input for 2 of the 3 values
+
+    The Dirichlet mode must be on the simplex, i.e., all values must sum to 1
+
+    If user input is incompatible with the simplex, then a default is returned
     """
 
-    alpha_sum = sum(alpha)
-    alpha_len = len(alpha)
-    dirichlet_mode = [(e - 1) / (alpha_sum - alpha_len) for e in alpha]
+    input_multinomial_sum = multinomial_proportion_1 + multinomial_proportion_2
 
-    return np.array(dirichlet_mode)
+    if input_multinomial_sum > 1:
+        return (1/3, 1/3, 1/3)
+
+    else: 
+        multinomial_proportion_3 = 1 - input_multinomial_sum 
+        return (
+            multinomial_proportion_1, 
+            multinomial_proportion_2,
+            multinomial_proportion_3)
 
 
 def generate_multinomial_data(
-    true_alpha_mode: np.ndarray, data_points_n: int=100, 
+    true_alpha_mode: Sequence[float], data_points_n: int=100, 
     random_state: int=31723, return_one_hot_encoded: bool=True) -> np.ndarray:
     """
     Generates a sample of multinomial data
@@ -58,6 +71,17 @@ def calculate_dirichlet_parameter_series(
     return dirichlet_param_series 
 
 
+def calculate_dirichlet_mode(alpha: Sequence[float]) -> np.ndarray:
+    """
+    """
+
+    alpha_sum = sum(alpha)
+    alpha_len = len(alpha)
+    dirichlet_mode = [(e - 1) / (alpha_sum - alpha_len) for e in alpha]
+
+    return np.array(dirichlet_mode)
+
+
 def create_barycentric_grid_coordinates(axis_ticks_n: int=100) -> np.ndarray:
     """
     Given the number of coordinates/ticks per axis (range from 0 to 1), returns 
@@ -75,6 +99,45 @@ def create_barycentric_grid_coordinates(axis_ticks_n: int=100) -> np.ndarray:
     grid = grid[coordinate_sums == 1, :]
 
     return grid
+
+
+def calculate_beta_parameter_series(
+    beta_parameter_alpha: float, 
+    beta_parameter_beta: float, 
+    binomial_sample: np.ndarray) -> list[tuple[float, float]]:
+    """
+    Given the prior beta distribution parameters alpha and beta and a binomially
+        distributed sample, calculate the series of beta parameters for each
+        update of the beta distribution based on each successive item in the 
+        binomial sample
+    """
+
+    # if user provides no input values, assign default value
+    if not beta_parameter_alpha:
+        beta_parameter_alpha = 2
+    if not beta_parameter_beta:
+        beta_parameter_beta = 2
+
+    alpha_param_sums = binomial_sample.cumsum() 
+    beta_param_sums = range(len(alpha_param_sums)) - alpha_param_sums + 1
+    beta_param_series = [
+        (beta_parameter_alpha + alpha_param_sums[i], 
+         beta_parameter_beta + beta_param_sums[i]) 
+        for i in range(len(binomial_sample))]
+    beta_param_series = (
+        [(beta_parameter_alpha, beta_parameter_beta)] + beta_param_series)
+
+    return beta_param_series
+
+
+def calculate_beta_mode(
+    beta_parameter_alpha: float, beta_parameter_beta: float) -> float:
+
+    beta_mode = (
+        (beta_parameter_alpha  - 1) / 
+        (beta_parameter_alpha + beta_parameter_beta - 2))
+
+    return beta_mode
 
 
 def beta_statistical_attributes() -> tuple[np.ndarray, float, int]:
@@ -155,16 +218,20 @@ app.layout = dash.html.Div([
     dash.html.Div([
         dash.html.Div(
             children=dash.html.Div(
-                dash.html.P('Dirichlet parameter alpha 1 starting value (prior)')), 
-            className="four columns"),
+                dash.html.P('Dirichlet parameter starting values (priors):')), 
+            className="two columns"),
         dash.html.Div(
             children=dash.html.Div(
-                dash.html.P('Dirichlet parameter alpha 2 starting value (prior)')), 
-            className="four columns"),
+                dash.html.P('Alpha A')), 
+            className="one columns"),
         dash.html.Div(
             children=dash.html.Div(
-                dash.html.P('Dirichlet parameter alpha 2 starting value (prior)')), 
-            className="four columns"),
+                dash.html.P('Alpha B')), 
+            className="one columns"),
+        dash.html.Div(
+            children=dash.html.Div(
+                dash.html.P('Alpha C')), 
+            className="one columns"),
         ], className="row"),
 
     dash.html.Div([
@@ -172,17 +239,17 @@ app.layout = dash.html.Div([
             children=dash.dcc.Input(
                 id='dirichlet_parameter_1', type='number', 
                 min=1.01, max=500, step=0.01, value=2, placeholder='Alpha 1'), 
-            className="four columns"),
+            className="offset-by-two one columns"),
         dash.html.Div(
             children=dash.dcc.Input(
                 id='dirichlet_parameter_2', type='number', 
                 min=1.01, max=500, step=0.01, value=2, placeholder='Alpha 2'), 
-            className="four columns"),
+            className="one columns"),
         dash.html.Div(
             children=dash.dcc.Input(
                 id='dirichlet_parameter_3', type='number', 
                 min=1.01, max=500, step=0.01, value=2, placeholder='Alpha 3'), 
-            className="four columns"),
+            className="one columns"),
         ], className="row"),
 
     dash.html.Div(style={"padding": padding_space}),
@@ -198,15 +265,15 @@ app.layout = dash.html.Div([
             className="two columns"),
         dash.html.Div(
             children=dash.html.Div(
-                dash.html.P('Multinomial Proportion (True Distribution Mode)')), 
+                dash.html.P('Multinomial Proportion (True Distribution Mode):')), 
             className="two columns"),
         dash.html.Div(
             children=dash.html.Div(
-                dash.html.P('Multinomial Proportion (True Distribution Mode)')), 
+                dash.html.P('Proportion A')), 
             className="two columns"),
         dash.html.Div(
             children=dash.html.Div(
-                dash.html.P('Multinomial Proportion (True Distribution Mode)')), 
+                dash.html.P('Proportion B')), 
             className="two columns"),
         ], className="row"),
 
@@ -224,22 +291,15 @@ app.layout = dash.html.Div([
             className="two columns"),
         dash.html.Div(
             children=dash.dcc.Slider(
-                id='binomial_proportion_1', 
-                min=0, max=1, step=0.01, value=0.5, marks=None, 
+                id='multinomial_proportion_1', 
+                min=0, max=1, step=0.01, value=1/3, marks=None, 
                 tooltip={'placement': 'bottom', 'always_visible': True}, 
                 updatemode='drag'), 
-            className="two columns"),
+            className="offset-by-two two columns"),
         dash.html.Div(
             children=dash.dcc.Slider(
-                id='binomial_proportion_2', 
-                min=0, max=1, step=0.01, value=0.5, marks=None, 
-                tooltip={'placement': 'bottom', 'always_visible': True}, 
-                updatemode='drag'), 
-            className="two columns"),
-        dash.html.Div(
-            children=dash.dcc.Slider(
-                id='binomial_proportion_3', 
-                min=0, max=1, step=0.01, value=0.5, marks=None, 
+                id='multinomial_proportion_2', 
+                min=0, max=1, step=0.01, value=1/3, marks=None, 
                 tooltip={'placement': 'bottom', 'always_visible': True}, 
                 updatemode='drag'), 
             className="two columns"),
@@ -247,7 +307,9 @@ app.layout = dash.html.Div([
 
     dash.html.Div(style={"padding": padding_space}),
 
-    dash.html.Div([dash.html.H1(id='heading', style={'textAlign': 'center'})]),
+    dash.html.Div([dash.html.H2(id='heading1', style={'textAlign': 'center'})]),
+    dash.html.Div([dash.html.H2(id='heading2', style={'textAlign': 'center'})]),
+    dash.html.Div([dash.html.H2(id='heading3', style={'textAlign': 'center'})]),
 
     dash.html.Div([
         dash.html.Div(
@@ -284,10 +346,11 @@ app.layout = dash.html.Div([
                     'width': '40vh', 
                     'height': '40vh', 
                     'transform': 'rotate(-30deg)'})],
-            className="offset-by-three four columns"),
+            className="offset-by-four four columns"),
     ], className="row"),
 
-    dash.dcc.Interval(id='interval-component', interval=1_000, n_intervals=0, disabled=False)
+    dash.dcc.Interval(
+        id='interval-component', interval=1_000, n_intervals=0, disabled=False)
 ])
 
 # this CSS file placed inside 'assets' directory within the dash app directory
@@ -337,32 +400,113 @@ def reset_interval(n_clicks, n_intervals, value) -> int:
 
 
 @app.callback(
-    Output('heading', 'children'),
+    Output('heading1', 'children'),
+    [Input('multinomial_proportion_1', 'value'),
+     Input('multinomial_proportion_2', 'value')])
+def overall_heading1(
+    multinomial_proportion_1: float, multinomial_proportion_2: float) -> str: 
+    """
+    Displays Dirichlet distribution parameters 
+    """
+
+    # generate multinomial sample based on user's specified mode/proportions
+    true_alpha_mode = calculate_dirichlet_mode_from_user_input(
+        multinomial_proportion_1, multinomial_proportion_2)
+
+    title = (
+        f'Mode: A ={true_alpha_mode[0]: .2f}, '
+        f'B ={true_alpha_mode[1]: .2f}, '
+        f'C ={true_alpha_mode[2]: .2f}')
+
+    return title
+
+
+@app.callback(
+    Output('heading2', 'children'),
     [Input('interval-component', 'n_intervals'),
      Input('dirichlet_parameter_1', 'value'), 
      Input('dirichlet_parameter_2', 'value'), 
      Input('dirichlet_parameter_3', 'value'),
+     Input('multinomial_proportion_1', 'value'),
+     Input('multinomial_proportion_2', 'value'),
      Input('data_points_n', 'value'),
      Input('random_state', 'value')])
-def overall_heading(
+def overall_heading2(
     n_intervals: int, dirichlet_parameter_1: float, 
     dirichlet_parameter_2: float, dirichlet_parameter_3: float, 
+    multinomial_proportion_1: float, multinomial_proportion_2: float, 
     data_points_n: int, random_state: int) -> str:
     """
     Displays Dirichlet distribution parameters 
     """
 
-    alpha = [
-        dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3]
-    dirichlet_alpha_mode = calculate_dirichlet_mode(alpha)
+    # generate multinomial sample based on user's specified mode/proportions
+    true_alpha_mode = calculate_dirichlet_mode_from_user_input(
+        multinomial_proportion_1, multinomial_proportion_2)
     sample = generate_multinomial_data(
-        dirichlet_alpha_mode, data_points_n, random_state)
-    parameter_series = calculate_dirichlet_parameter_series(alpha, sample)
+        true_alpha_mode, data_points_n, random_state)
 
-    loop_len = min(n_intervals, len(parameter_series)-1)
-    parameters = parameter_series[loop_len, :] 
-    title = f'{n_intervals}, {loop_len}, {len(parameter_series)}, {parameters[0]}, {parameters[1]}, {parameters[2]}'
-    #title = f'{parameters[0]}, {parameters[1]}, {parameters[2]}'
+    # calculate Dirichlet parameters after each update from the sample 
+    alpha = (
+        dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3)
+    dirichlet_parameter_series = calculate_dirichlet_parameter_series(
+        alpha, sample)
+
+    # calculate Dirichlet statistics for the current update
+    loop_len = min(n_intervals, len(dirichlet_parameter_series)-1)
+    dirichlet_parameters = dirichlet_parameter_series[loop_len, :] 
+    dirichlet_mode = calculate_dirichlet_mode(dirichlet_parameters)
+
+    title = (
+        #f'{n_intervals}, {loop_len}, {len(dirichlet_parameter_series)}; '
+        #f'{loop_len}; '
+        f'Estimate: A ={dirichlet_mode[0]: .2f}, '
+        f'B={dirichlet_mode[1]: .2f}, '
+        f'C ={dirichlet_mode[2]: .2f}')
+
+    return title
+
+
+@app.callback(
+    Output('heading3', 'children'),
+    [Input('interval-component', 'n_intervals'),
+     Input('dirichlet_parameter_1', 'value'), 
+     Input('dirichlet_parameter_2', 'value'), 
+     Input('dirichlet_parameter_3', 'value'),
+     Input('multinomial_proportion_1', 'value'),
+     Input('multinomial_proportion_2', 'value'),
+     Input('data_points_n', 'value'),
+     Input('random_state', 'value')])
+def overall_heading3(
+    n_intervals: int, dirichlet_parameter_1: float, 
+    dirichlet_parameter_2: float, dirichlet_parameter_3: float, 
+    multinomial_proportion_1: float, multinomial_proportion_2: float, 
+    data_points_n: int, random_state: int) -> str:
+    """
+    Displays Dirichlet distribution parameters 
+    """
+
+    # generate multinomial sample based on user's specified mode/proportions
+    true_alpha_mode = calculate_dirichlet_mode_from_user_input(
+        multinomial_proportion_1, multinomial_proportion_2)
+    sample = generate_multinomial_data(
+        true_alpha_mode, data_points_n, random_state)
+
+    # calculate Dirichlet parameters after each update from the sample 
+    alpha = (
+        dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3)
+    dirichlet_parameter_series = calculate_dirichlet_parameter_series(
+        alpha, sample)
+
+    # calculate Dirichlet statistics for the current update
+    loop_len = min(n_intervals, len(dirichlet_parameter_series)-1)
+    dirichlet_parameters = dirichlet_parameter_series[loop_len, :] 
+
+    title = (
+        f'Parameters: A = {dirichlet_parameters[0]}, '
+        f'B = {dirichlet_parameters[1]}, '
+        f'C = {dirichlet_parameters[2]}')
+
     return title
 
 
@@ -372,33 +516,42 @@ def overall_heading(
      Input('dirichlet_parameter_1', 'value'), 
      Input('dirichlet_parameter_2', 'value'), 
      Input('dirichlet_parameter_3', 'value'),
+     Input('multinomial_proportion_1', 'value'),
+     Input('multinomial_proportion_2', 'value'),
      Input('data_points_n', 'value'),
      Input('random_state', 'value')])
 def plot_dirichlet_3d(
     n_intervals: int, dirichlet_parameter_1: float,
     dirichlet_parameter_2: float, dirichlet_parameter_3: float,
+    multinomial_proportion_1: float, multinomial_proportion_2: float, 
     data_points_n: int, random_state: int) -> go.Figure:
 
-    alpha = [
-        dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3]
-    dirichlet_alpha_mode = calculate_dirichlet_mode(alpha)
+    # generate multinomial sample based on user's specified mode/proportions
+    true_alpha_mode = calculate_dirichlet_mode_from_user_input(
+        multinomial_proportion_1, multinomial_proportion_2)
     sample = generate_multinomial_data(
-        dirichlet_alpha_mode, data_points_n, random_state)
-    parameter_series = calculate_dirichlet_parameter_series(alpha, sample)
-    loop_len = min(n_intervals, len(parameter_series)-1)
-    parameters = parameter_series[loop_len, :] 
+        true_alpha_mode, data_points_n, random_state)
+
+    # calculate Dirichlet parameters after each update from the sample 
+    alpha = (
+        dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3)
+    dirichlet_parameter_series = calculate_dirichlet_parameter_series(
+        alpha, sample)
+
+    # calculate Dirichlet statistics for the current update
+    loop_len = min(n_intervals, len(dirichlet_parameter_series)-1)
+    dirichlet_parameters = dirichlet_parameter_series[loop_len, :] 
+    dirichlet_mode = calculate_dirichlet_mode(dirichlet_parameters)
 
     grid = create_barycentric_grid_coordinates(91)
 
     # apply probability density function across triangular plot grid
-    pdfs = [dirichlet.pdf(e, parameters) for e in grid]
+    pdfs = [dirichlet.pdf(e, dirichlet_parameters) for e in grid]
     
-    dirichlet_mode = calculate_dirichlet_mode(parameters)
-
-    def makeAxis(title, tickangle):
+    def makeAxis(title, tickangle, titlefont):
         return {
           'title': title,
-          'titlefont': { 'size': 40 },
+          'titlefont': titlefont,
           'tickangle': tickangle,
           'tickfont': { 'size': 15 },
           'tickcolor': 'rgba(0,0,0,0)',
@@ -422,6 +575,19 @@ def plot_dirichlet_3d(
             'opacity': 0.9}
     })
 
+    fig_trace_true_mode = go.Scatterternary({
+        'mode': 'markers',
+        'a': np.array(true_alpha_mode[0]),
+        'b': np.array(true_alpha_mode[1]),
+        'c': np.array(true_alpha_mode[2]),
+        'marker': {
+            #'symbol': 100,
+            'color': 'black',
+            'size': 8,
+            #'line': { 'width': 2 }
+            'opacity': 0.9}
+    })
+
     fig_trace_mode = go.Scatterternary({
         'mode': 'markers',
         'a': np.array(dirichlet_mode[0]),
@@ -439,16 +605,22 @@ def plot_dirichlet_3d(
         'template': 'plotly_white',
         'showlegend': False}
 
+    # enlarge label of category of the most recent sample update
+    category_title_sizes = sample[loop_len, :].copy()
+    category_title_sizes[category_title_sizes==0] = 40
+    category_title_sizes[category_title_sizes==1] = 70
+
     layout02 = {
         'ternary': {
             'sum': 1,
-            'aaxis': makeAxis('A', 0),
-            'baxis': makeAxis('B', 45),
-            'caxis': makeAxis('C', -45)
+            'aaxis': makeAxis('A', 0, {'size': category_title_sizes[0]}),
+            'baxis': makeAxis('B', 45, {'size': category_title_sizes[1]}),
+            'caxis': makeAxis('C', -45, {'size': category_title_sizes[2]})
         },
     }
 
     fig = go.Figure(data=fig_trace, layout=layout01)
+    fig.add_trace(fig_trace_true_mode)
     fig.add_trace(fig_trace_mode)
     fig.update_layout(layout02)
 
@@ -471,40 +643,90 @@ def show_plot_beta_01(show_beta_plots: bool):
     [Input('interval-component', 'n_intervals'),
      Input('dirichlet_parameter_1', 'value'), 
      Input('dirichlet_parameter_2', 'value'), 
-     Input('dirichlet_parameter_3', 'value')])
-def plot_beta_01(n_intervals: int,
-        dirichlet_parameter_1: float,
-        dirichlet_parameter_2: float,
-        dirichlet_parameter_3: float,
-        ):
+     Input('dirichlet_parameter_3', 'value'),
+     Input('multinomial_proportion_1', 'value'),
+     Input('multinomial_proportion_2', 'value'),
+     Input('data_points_n', 'value'),
+     Input('random_state', 'value')])
+def plot_beta_01(
+    n_intervals: int, dirichlet_parameter_1: float,
+    dirichlet_parameter_2: float, dirichlet_parameter_3: float,
+    multinomial_proportion_1: float, multinomial_proportion_2: float, 
+    data_points_n: int, random_state: int) -> go.Figure:
+    """
+    Plots sequence of beta distribution updates with more recent distributions
+        shown with thicker and more opaque curves
+    Specifies the true, user-specified proportion of the binomial distribution
+        as well as the most recent beta distribution's beta estimate (i.e., the
+        mode of the distribution) of that proportion
+    """
 
-    alpha = [dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3]
-    beta_params = [alpha[0], sum(alpha) - alpha[0]]
-    beta_mode = (beta_params[0] - 1) / (beta_params[0] + beta_params[1] - 2)
+    # generate multinomial sample based on user's specified mode/proportions
+    true_alpha_mode = calculate_dirichlet_mode_from_user_input(
+        multinomial_proportion_1, multinomial_proportion_2)
+    sample = generate_multinomial_data(
+        true_alpha_mode, data_points_n, random_state)
 
-    x, threshold, idx50 = beta_statistical_attributes()
-    left_color, right_color, line01, line02, title, layout = beta_plot_attributes()
+    # calculate Dirichlet parameters after each update from the sample 
+    alpha = (
+        dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3)
+    dirichlet_parameter_series = calculate_dirichlet_parameter_series(
+        alpha, sample)
 
-    y = beta.pdf(x, beta_params[0], beta_params[1])
+    # calculate beta parameters after each update from the sample 
+    beta_idx = 0
+    beta_parameter_series = np.column_stack(
+        (dirichlet_parameter_series[:, beta_idx],
+         dirichlet_parameter_series.sum(axis=1) - 
+         dirichlet_parameter_series[:, beta_idx]))
+    loop_len = min(n_intervals, len(beta_parameter_series)-1)
+    beta_parameters = beta_parameter_series[loop_len, :] 
 
-    beta_prop0 = beta.cdf(threshold, beta_params[0], beta_params[1])
-    beta_prop1 = 1 - beta_prop0 
-    beta_prop_text0 = str(round(beta_prop0, 2))
-    beta_prop_text1 = str(round(beta_prop1, 2))
-    beta_mode_text = str(round(beta_mode, 3))
+    true_beta_mode = true_alpha_mode[beta_idx] 
+    x, _, _ = beta_statistical_attributes()
 
-    title = title.replace('beta_id', 'A')
-    title = title.replace('beta_prop_text0', beta_mode_text)
-    #title = title.replace('beta_prop_text0', beta_prop_text0)
-    #title = title.replace('beta_prop_text1', beta_prop_text1)
-    title = title.replace('beta_prop_text1', '')
+    layout = go.Layout({
+        'template': 'plotly_white',
+        'showlegend': False,
+        'font_size': 24})
+    max_line_width = 5
+    trace_color = 'red'
 
     fig = go.Figure(layout=layout)
-    fig.add_trace(go.Scatter(x=x[:idx50+1], y=y[:idx50+1], line=line01, fill='tozeroy'))
-    fig.add_trace(go.Scatter(x=x[idx50:], y=y[idx50:], line=line02, fill='tozeroy'))
-    fig.add_vline(x=beta_mode)
+
+    fig.add_vline(x=true_beta_mode)
+
+    loop_len = min(n_intervals+1, len(beta_parameter_series))
+    for i in range(loop_len):
+
+        # make the most recently added lines/traces thicker than older traces
+        line_width = [
+            max(1, max_line_width - (loop_len - j - 1)) 
+            for j in range(loop_len)]
+        line01 = {'color': trace_color, 'width': line_width[i]}
+
+        # make the most recently added lines/traces more opaque than older traces
+        line_opacity = np.linspace(0.3, 1, loop_len)
+        if len(line_opacity) == 1:
+            line_opacity = [1]
+
+        # calculate density for each beta distribution
+        beta_parameter_alpha = beta_parameter_series[i][0]
+        beta_parameter_beta = beta_parameter_series[i][1]
+        y = beta.pdf(x, beta_parameter_alpha, beta_parameter_beta)
+
+        fig.add_trace(go.Scatter(x=x, y=y, line=line01, opacity=line_opacity[i]))
+
+    beta_mode = calculate_beta_mode(beta_parameters[0], beta_parameters[1])
+
+    fig.add_vline(x=beta_mode, line_color=trace_color)
+    beta_mode = round(beta_mode, 2)
+    title = (f'A Mode ={true_beta_mode: .2f}<br><span style="color:red">'
+             f'Estimate ={beta_mode: .2f}</span>')
+
     fig.update_xaxes(
-        showline=True, linewidth=2, linecolor='black', tick0=0, dtick=0.2)
+        showline=True, linewidth=2, linecolor='black', tick0=0, dtick=0.2, 
+        tickangle=90)
     fig.update_yaxes(
         showline=True, linewidth=2, linecolor='black', showticklabels=False)
     fig.update_layout(title=title, title_x=0.5)
@@ -528,45 +750,93 @@ def show_plot_beta_02(show_beta_plots: bool):
     [Input('interval-component', 'n_intervals'),
      Input('dirichlet_parameter_1', 'value'), 
      Input('dirichlet_parameter_2', 'value'), 
-     Input('dirichlet_parameter_3', 'value')])
-def plot_beta_02(n_intervals: int,
-        dirichlet_parameter_1: float,
-        dirichlet_parameter_2: float,
-        dirichlet_parameter_3: float,
-        ):
+     Input('dirichlet_parameter_3', 'value'),
+     Input('multinomial_proportion_1', 'value'),
+     Input('multinomial_proportion_2', 'value'),
+     Input('data_points_n', 'value'),
+     Input('random_state', 'value')])
+def plot_beta_02(
+    n_intervals: int, dirichlet_parameter_1: float,
+    dirichlet_parameter_2: float, dirichlet_parameter_3: float,
+    multinomial_proportion_1: float, multinomial_proportion_2: float, 
+    data_points_n: int, random_state: int) -> go.Figure:
+    """
+    Plots sequence of beta distribution updates with more recent distributions
+        shown with thicker and more opaque curves
+    Specifies the true, user-specified proportion of the binomial distribution
+        as well as the most recent beta distribution's beta estimate (i.e., the
+        mode of the distribution) of that proportion
+    """
 
-    alpha = [dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3]
-    beta_params = [alpha[1], sum(alpha) - alpha[1]]
-    beta_mode = (beta_params[0] - 1) / (beta_params[0] + beta_params[1] - 2)
 
-    x, threshold, idx50 = beta_statistical_attributes()
-    left_color, right_color, line01, line02, title, layout = beta_plot_attributes()
+    # generate multinomial sample based on user's specified mode/proportions
+    true_alpha_mode = calculate_dirichlet_mode_from_user_input(
+        multinomial_proportion_1, multinomial_proportion_2)
+    sample = generate_multinomial_data(
+        true_alpha_mode, data_points_n, random_state)
 
-    y = beta.pdf(x, beta_params[0], beta_params[1])
+    # calculate Dirichlet parameters after each update from the sample 
+    alpha = (
+        dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3)
+    dirichlet_parameter_series = calculate_dirichlet_parameter_series(
+        alpha, sample)
 
-    beta_prop0 = beta.cdf(threshold, beta_params[0], beta_params[1])
-    beta_prop1 = 1 - beta_prop0 
-    beta_prop_text0 = str(round(beta_prop0, 2))
-    beta_prop_text1 = str(round(beta_prop1, 2))
-    beta_mode_text = str(round(beta_mode, 3))
+    # calculate beta parameters after each update from the sample 
+    beta_idx = 1
+    beta_parameter_series = np.column_stack(
+        (dirichlet_parameter_series[:, beta_idx],
+         dirichlet_parameter_series.sum(axis=1) - 
+         dirichlet_parameter_series[:, beta_idx]))
+    loop_len = min(n_intervals, len(beta_parameter_series)-1)
+    beta_parameters = beta_parameter_series[loop_len, :] 
 
-    title = title.replace('beta_id', 'B')
-    title = title.replace('beta_prop_text0', beta_mode_text)
-    title = title.replace('beta_prop_text1', '')
-    #title = title.replace('beta_prop_text0', beta_prop_text0)
-    #title = title.replace('beta_prop_text1', beta_prop_text1)
-    #title = title.replace(left_color, 'dummy')
-    #title = title.replace(right_color, left_color)
-    #title = title.replace('dummy', right_color)
+    true_beta_mode = true_alpha_mode[beta_idx] 
+    x, _, _ = beta_statistical_attributes()
+
+    layout = go.Layout({
+        'template': 'plotly_white',
+        'showlegend': False,
+        'font_size': 24})
+    max_line_width = 5
+    trace_color = 'red'
 
     fig = go.Figure(layout=layout)
-    fig.add_trace(go.Scatter(x=x[:idx50+1], y=y[:idx50+1], line=line01, fill='tozeroy'))
-    fig.add_trace(go.Scatter(x=x[idx50:], y=y[idx50:], line=line02, fill='tozeroy'))
-    fig.add_vline(x=beta_mode)
+
+    fig.add_vline(x=true_beta_mode)
+
+    loop_len = min(n_intervals+1, len(beta_parameter_series))
+    for i in range(loop_len):
+
+        # make the most recently added lines/traces thicker than older traces
+        line_width = [
+            max(1, max_line_width - (loop_len - j - 1)) 
+            for j in range(loop_len)]
+        line01 = {'color': trace_color, 'width': line_width[i]}
+
+        # make the most recently added lines/traces more opaque than older traces
+        line_opacity = np.linspace(0.3, 1, loop_len)
+        if len(line_opacity) == 1:
+            line_opacity = [1]
+
+        # calculate density for each beta distribution
+        beta_parameter_alpha = beta_parameter_series[i][0]
+        beta_parameter_beta = beta_parameter_series[i][1]
+        y = beta.pdf(x, beta_parameter_alpha, beta_parameter_beta)
+
+        fig.add_trace(go.Scatter(x=x, y=y, line=line01, opacity=line_opacity[i]))
+
+    beta_mode = calculate_beta_mode(beta_parameters[0], beta_parameters[1])
+
+    fig.add_vline(x=beta_mode, line_color=trace_color)
+    beta_mode = round(beta_mode, 2)
+    title = (f'B Mode ={true_beta_mode: .2f}<br><span style="color:red">'
+             f'Estimate ={beta_mode: .2f}</span>')
+
     fig.update_xaxes(
-        showline=True, linewidth=2, linecolor='black', tick0=0, dtick=0.2, autorange='reversed')
+        showline=True, linewidth=2, linecolor='black', tick0=0, dtick=0.2,
+        autorange='reversed', tickangle=90)
     fig.update_yaxes(
-        showline=True, linewidth=2, linecolor='black', showticklabels=False)
+        showline=True, linewidth=2, linecolor='black', showticklabels=False) 
     fig.update_layout(title=title, title_x=0.5)
 
     return fig
@@ -588,42 +858,92 @@ def show_plot_beta_03(show_beta_plots: bool):
     [Input('interval-component', 'n_intervals'),
      Input('dirichlet_parameter_1', 'value'), 
      Input('dirichlet_parameter_2', 'value'), 
-     Input('dirichlet_parameter_3', 'value')])
-def plot_beta_03(n_intervals: int,
-        dirichlet_parameter_1: float,
-        dirichlet_parameter_2: float,
-        dirichlet_parameter_3: float,
-        ):
+     Input('dirichlet_parameter_3', 'value'),
+     Input('multinomial_proportion_1', 'value'),
+     Input('multinomial_proportion_2', 'value'),
+     Input('data_points_n', 'value'),
+     Input('random_state', 'value')])
+def plot_beta_03(
+    n_intervals: int, dirichlet_parameter_1: float,
+    dirichlet_parameter_2: float, dirichlet_parameter_3: float,
+    multinomial_proportion_1: float, multinomial_proportion_2: float, 
+    data_points_n: int, random_state: int) -> go.Figure:
+    """
+    Plots sequence of beta distribution updates with more recent distributions
+        shown with thicker and more opaque curves
+    Specifies the true, user-specified proportion of the binomial distribution
+        as well as the most recent beta distribution's beta estimate (i.e., the
+        mode of the distribution) of that proportion
+    """
 
-    alpha = [dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3]
-    beta_params = [alpha[2], sum(alpha) - alpha[2]]
-    beta_mode = (beta_params[0] - 1) / (beta_params[0] + beta_params[1] - 2)
+    # generate multinomial sample based on user's specified mode/proportions
+    true_alpha_mode = calculate_dirichlet_mode_from_user_input(
+        multinomial_proportion_1, multinomial_proportion_2)
+    sample = generate_multinomial_data(
+        true_alpha_mode, data_points_n, random_state)
 
-    x, threshold, idx50 = beta_statistical_attributes()
-    left_color, right_color, line01, line02, title, layout = beta_plot_attributes()
+    # calculate Dirichlet parameters after each update from the sample 
+    alpha = (
+        dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3)
+    dirichlet_parameter_series = calculate_dirichlet_parameter_series(
+        alpha, sample)
 
-    y = beta.pdf(x, beta_params[0], beta_params[1])
+    # calculate beta parameters after each update from the sample 
+    beta_idx = 2
+    beta_parameter_series = np.column_stack(
+        (dirichlet_parameter_series[:, beta_idx],
+         dirichlet_parameter_series.sum(axis=1) - 
+         dirichlet_parameter_series[:, beta_idx]))
+    loop_len = min(n_intervals, len(beta_parameter_series)-1)
+    beta_parameters = beta_parameter_series[loop_len, :] 
 
-    beta_prop0 = beta.cdf(threshold, beta_params[0], beta_params[1])
-    beta_prop1 = 1 - beta_prop0 
-    beta_prop_text0 = str(round(beta_prop0, 2))
-    beta_prop_text1 = str(round(beta_prop1, 2))
-    beta_mode_text = str(round(beta_mode, 3))
+    true_beta_mode = true_alpha_mode[beta_idx] 
+    x, _, _ = beta_statistical_attributes()
 
-    title = title.replace('beta_id', 'C')
-    title = title.replace('beta_prop_text0', beta_mode_text)
-    #title = title.replace('beta_prop_text0', beta_prop_text0)
-    #title = title.replace('beta_prop_text1', beta_prop_text1)
-    title = title.replace('beta_prop_text1', '')
+    layout = go.Layout({
+        'template': 'plotly_white',
+        'showlegend': False,
+        'font_size': 24})
+    max_line_width = 5
+    trace_color = 'red'
 
     fig = go.Figure(layout=layout)
-    fig.add_trace(go.Scatter(x=x[:idx50+1], y=y[:idx50+1], line=line01, fill='tozeroy'))
-    fig.add_trace(go.Scatter(x=x[idx50:], y=y[idx50:], line=line02, fill='tozeroy'))
-    fig.add_vline(x=beta_mode)
+
+    fig.add_vline(x=true_beta_mode)
+
+    loop_len = min(n_intervals+1, len(beta_parameter_series))
+    for i in range(loop_len):
+
+        # make the most recently added lines/traces thicker than older traces
+        line_width = [
+            max(1, max_line_width - (loop_len - j - 1)) 
+            for j in range(loop_len)]
+        line01 = {'color': trace_color, 'width': line_width[i]}
+
+        # make the most recently added lines/traces more opaque than older traces
+        line_opacity = np.linspace(0.3, 1, loop_len)
+        if len(line_opacity) == 1:
+            line_opacity = [1]
+
+        # calculate density for each beta distribution
+        beta_parameter_alpha = beta_parameter_series[i][0]
+        beta_parameter_beta = beta_parameter_series[i][1]
+        y = beta.pdf(x, beta_parameter_alpha, beta_parameter_beta)
+
+        fig.add_trace(go.Scatter(x=x, y=y, line=line01, opacity=line_opacity[i]))
+
+    beta_mode = calculate_beta_mode(beta_parameters[0], beta_parameters[1])
+
+    fig.add_vline(x=beta_mode, line_color=trace_color)
+    beta_mode = round(beta_mode, 2)
+    title = (f'C Mode ={true_beta_mode: .2f}<br><span style="color:red">'
+             f'Estimate ={beta_mode: .2f}</span>')
+
     fig.update_xaxes(
-        showline=True, linewidth=2, linecolor='black', tick0=0, dtick=0.2)#autorange='reversed')
+        showline=True, linewidth=2, linecolor='black', tick0=0, dtick=0.2, 
+        tickangle=90)
     fig.update_yaxes(
-        showline=True, linewidth=2, linecolor='black', showticklabels=False)
+        showline=True, linewidth=2, linecolor='black', showticklabels=False) 
     fig.update_layout(title=title, title_x=0.5)
 
     return fig
