@@ -537,11 +537,14 @@ def plot_dirichlet_3d(
         dirichlet_parameter_1, dirichlet_parameter_2, dirichlet_parameter_3)
     dirichlet_parameter_series = calculate_dirichlet_parameter_series(
         alpha, sample)
+    dirichlet_modes = np.apply_along_axis(
+        calculate_dirichlet_mode, 1, dirichlet_parameter_series)
 
     # calculate Dirichlet statistics for the current update
     loop_len = min(n_intervals, len(dirichlet_parameter_series)-1)
     dirichlet_parameters = dirichlet_parameter_series[loop_len, :] 
-    dirichlet_mode = calculate_dirichlet_mode(dirichlet_parameters)
+    dirichlet_modes_to_current_update = dirichlet_modes[:loop_len+1, :] 
+    dirichlet_mode = dirichlet_modes[loop_len, :] 
 
     grid = create_barycentric_grid_coordinates(91)
 
@@ -567,25 +570,22 @@ def plot_dirichlet_3d(
         'c': grid[:, 2],
         'marker': {
             #'symbol': 100,
-            'color': '#DB7365',
-            #'color': ['red', 'blue', 'yellow', 'green'],
             'color': pdfs,
             'size': 8,
-            #'line': { 'width': 2 }
             'opacity': 0.9}
     })
 
-    fig_trace_true_mode = go.Scatterternary({
-        'mode': 'markers',
-        'a': np.array(true_alpha_mode[0]),
-        'b': np.array(true_alpha_mode[1]),
-        'c': np.array(true_alpha_mode[2]),
+    fig_trace_modes = go.Scatterternary({
+        'mode': 'lines',
+        'a': dirichlet_modes_to_current_update[:, 0],
+        'b': dirichlet_modes_to_current_update[:, 1],
+        'c': dirichlet_modes_to_current_update[:, 2],
         'marker': {
             #'symbol': 100,
-            'color': 'black',
+            'color': 'rgba(120, 120, 120, 0.4)',
             'size': 8,
-            #'line': { 'width': 2 }
-            'opacity': 0.9}
+            'line': { 'width': 1 }}
+            #'opacity': 0.01}
     })
 
     fig_trace_mode = go.Scatterternary({
@@ -597,8 +597,19 @@ def plot_dirichlet_3d(
             #'symbol': 100,
             'color': 'blue',
             'size': 8,
-            #'line': { 'width': 2 }
-            'opacity': 0.5}
+            'opacity': 0.7}
+    })
+
+    fig_trace_true_mode = go.Scatterternary({
+        'mode': 'markers',
+        'a': np.array(true_alpha_mode[0]),
+        'b': np.array(true_alpha_mode[1]),
+        'c': np.array(true_alpha_mode[2]),
+        'marker': {
+            #'symbol': 100,
+            'color': 'black',
+            'size': 8,
+            'opacity': 1.0}
     })
 
     layout01 = {
@@ -620,8 +631,9 @@ def plot_dirichlet_3d(
     }
 
     fig = go.Figure(data=fig_trace, layout=layout01)
-    fig.add_trace(fig_trace_true_mode)
+    fig.add_trace(fig_trace_modes)
     fig.add_trace(fig_trace_mode)
+    fig.add_trace(fig_trace_true_mode)
     fig.update_layout(layout02)
 
     return fig
