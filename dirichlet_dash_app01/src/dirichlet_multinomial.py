@@ -18,9 +18,8 @@ def read_dirichlet_parameters() -> list[float]:
         distribution
     """
 
-    parameters_dir_name = 'parameters'
     input_filename = 'dirichlet_alpha_parameters.csv'
-    input_filepath = Path('.') / parameters_dir_name / input_filename 
+    input_filepath = list(Path('.').rglob('*/' + input_filename))[0]
 
     with open(input_filepath) as param_file:
         file_string = param_file.read().replace('\n', '')
@@ -39,9 +38,8 @@ def read_show_beta_plot_parameters() -> bool:
     return:  Boolean indicating whether or not to show the beta plots
     """
 
-    parameters_dir_name = 'parameters'
     input_filename = 'show_beta_plot_parameter.txt'
-    input_filepath = Path('.') / parameters_dir_name / input_filename 
+    input_filepath = list(Path('.').rglob('*/' + input_filename))[0]
 
     with open(input_filepath) as param_file:
         file_string = param_file.read().replace('\n', '')
@@ -348,4 +346,4 @@ def plot_beta_03(n_intervals: int):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True, use_reloader=True)
+    app.run_server(host='0.0.0.0', port=8050, debug=True)
