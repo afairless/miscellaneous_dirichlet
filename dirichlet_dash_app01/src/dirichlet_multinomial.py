@@ -229,6 +229,8 @@ def plot_beta_01(n_intervals: int):
 
     beta_prop0 = beta.cdf(threshold, beta_params[0], beta_params[1])
     beta_prop1 = 1 - beta_prop0 
+    assert isinstance(beta_prop0, np.float64)
+    assert isinstance(beta_prop1, np.float64)
     beta_prop_text0 = str(round(beta_prop0, 2))
     beta_prop_text1 = str(round(beta_prop1, 2))
 
@@ -276,6 +278,8 @@ def plot_beta_02(n_intervals: int):
 
     beta_prop0 = beta.cdf(threshold, beta_params[0], beta_params[1])
     beta_prop1 = 1 - beta_prop0 
+    assert isinstance(beta_prop0, np.float64)
+    assert isinstance(beta_prop1, np.float64)
     beta_prop_text0 = str(round(beta_prop0, 2))
     beta_prop_text1 = str(round(beta_prop1, 2))
 
@@ -326,6 +330,8 @@ def plot_beta_03(n_intervals: int):
 
     beta_prop0 = beta.cdf(threshold, beta_params[0], beta_params[1])
     beta_prop1 = 1 - beta_prop0 
+    assert isinstance(beta_prop0, np.float64)
+    assert isinstance(beta_prop1, np.float64)
     beta_prop_text0 = str(round(beta_prop0, 2))
     beta_prop_text1 = str(round(beta_prop1, 2))
 
