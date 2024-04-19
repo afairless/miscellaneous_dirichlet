@@ -15,4 +15,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build the Docker image
-      run: docker build . --file dirichlet_dash_app01/Dockerfile --tag dirichlet-docker:$(date +%s)
+      run: |
+        cd dirichlet_dash_app01
+        docker build . --file Dockerfile --tag dirichlet-docker:$(date +%s)
